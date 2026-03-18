@@ -29,20 +29,20 @@ class GameResult(BaseModel):
 def pick_move(fen: str, depth: int = 10):
     b = chess.Board(fen)
 
-    # 1. Run multipv=5 analysis — returns a list of up to 5 lines
+    # 1. Run Stockfish analysis (single search — best move comes from pv[0])
     engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH)
     try:
-        lines = engine.analyse(b, chess.engine.Limit(depth=depth), multipv=5)
+        result = engine.analyse(b, chess.engine.Limit(depth=depth))
     finally:
         engine.quit()
 
-    if not lines or not lines[0].get("pv"):
-        return {"move": None, "confidence": None, "heatmap": []}
+    if not result.get("pv"):
+        return {"move": None, "confidence": None}
 
-    best_move = lines[0]["pv"][0]
+    best_move = result["pv"][0]
 
-    # 2. Centipawn score from Black's perspective (top line)
-    cp = -lines[0]["score"].white().score(mate_score=10000)
+    # 2. Centipawn score from Black's perspective
+    cp = -result["score"].white().score(mate_score=10000)
 
     # 3. Sigmoid win probability
     p_stockfish = 1.0 / (1.0 + math.exp(-cp / 200.0))
@@ -56,20 +56,7 @@ def pick_move(fen: str, depth: int = 10):
     # 5. Combine, no clamping
     confidence = 0.7 * p_stockfish + 0.3 * neural_output
 
-    # 6. Build heatmap: destination square + cp value (Black's perspective) per candidate
-    heatmap = []
-    for line in lines:
-        if line.get("pv"):
-            move = line["pv"][0]
-            sq = chess.square_name(move.to_square)
-            val = -line["score"].white().score(mate_score=10000)
-            heatmap.append({"square": sq, "value": val})
-
-    return {
-        "move": best_move.uci(),
-        "confidence": round(confidence, 3),
-        "heatmap": heatmap,
-    }
+    return {"move": best_move.uci(), "confidence": round(confidence, 3)}
 
 @app.get("/")
 def root():
