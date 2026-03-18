@@ -1,6 +1,6 @@
 fastapi==0.115.12
 uvicorn[standard]==0.34.0
-torch==2.8.0
+numpy
 chess==1.11.1
 pydantic==2.10.6
 python-multipart==0.0.20

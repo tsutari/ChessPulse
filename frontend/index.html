@@ -156,6 +156,11 @@
 
     #confidence-chart { width: 100% !important; height: 120px !important; }
 
+    #leaderboard-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    #leaderboard-table th { color: #888; font-weight: 600; text-align: left; padding: 4px 6px; border-bottom: 1px solid #0f3460; }
+    #leaderboard-table td { color: #ccc; padding: 4px 6px; border-bottom: 1px solid #0f3460; }
+    #leaderboard-table tr:last-child td { border-bottom: none; }
+
     #board-wrap { transition: opacity 0.2s; }
     #board-wrap.dimmed { opacity: 0.75; }
 
@@ -215,6 +220,14 @@
     </div>
 
     <div class="card">
+      <h3>Leaderboard</h3>
+      <table id="leaderboard-table">
+        <thead><tr><th>Player</th><th>Result</th><th>Moves</th></tr></thead>
+        <tbody id="leaderboard-body"><tr><td colspan="3" style="color:#555">No entries yet</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="card">
       <h3>Move History</h3>
       <div id="move-list">—</div>
     </div>
@@ -253,6 +266,7 @@
     if (game.in_checkmate()) {
       const winner = game.turn() === "w" ? "Black wins!" : "White wins!";
       setStatus("Checkmate — " + winner, "ok");
+      handleCheckmate(winner);
     } else if (game.in_stalemate()) {
       setStatus("Stalemate — draw", "ok");
     } else if (game.in_draw()) {
@@ -286,7 +300,9 @@
     setStatus("", "thinking");
     document.getElementById("last-move").textContent = "";
     waiting = true;
-    fetchAIMove();
+    setTimeout(() => {
+      requestAnimationFrame(fetchAIMove);
+    }, 300);
   }
 
   function onSnapEnd() { board.position(game.fen()); }
@@ -393,6 +409,42 @@
   const depthInput = document.getElementById("depth");
   const depthVal   = document.getElementById("depth-val");
   depthInput.addEventListener("input", () => { depthVal.textContent = depthInput.value; });
+
+  async function refreshLeaderboard() {
+    try {
+      const res = await fetch(`${API}/leaderboard`);
+      const data = await res.json();
+      const tbody = document.getElementById("leaderboard-body");
+      if (!data.rows || !data.rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="color:#555">No entries yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.rows.map(r =>
+        `<tr><td>${r.user}</td><td>${r.result}</td><td>${r.moves}</td></tr>`
+      ).join("");
+    } catch (_) {}
+  }
+
+  async function handleCheckmate(winner) {
+    const resultStr = winner.startsWith("White") ? "Win" : "Loss";
+    const name = window.prompt("Game over! Enter your name for the leaderboard:");
+    if (!name || !name.trim()) return;
+    try {
+      await fetch(`${API}/submit_result`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user: name.trim(),
+          result: resultStr,
+          moves: moveHistory.length,
+          timestamp: Math.floor(Date.now() / 1000),
+        }),
+      });
+      refreshLeaderboard();
+    } catch (_) {}
+  }
+
+  refreshLeaderboard();
 
   // Dim board and show overlay whenever status has class "thinking"
   new MutationObserver(() => {

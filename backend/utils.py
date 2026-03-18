@@ -1,13 +1,11 @@
-import chess, torch
+import chess, numpy as np
 
 def board_to_tensor(board):
-    planes = torch.zeros((13,8,8))
-    for sq,p in board.piece_map().items():
-        idx=(p.piece_type-1)+(6 if p.color==chess.BLACK else 0)
-        r,c=divmod(sq,8); planes[idx,7-r,c]=1
-    planes[12].fill_(1. if board.turn else 0.)
-    return planes.unsqueeze(0)
+    x = np.zeros(64, dtype=np.float32)
+    for sq, p in board.piece_map().items():
+        sign = 1 if p.color == chess.WHITE else -1
+        x[sq] = sign * p.piece_type / 6.0
+    return x
 
 def legal_moves(board):
     return [m.uci() for m in board.legal_moves]
-

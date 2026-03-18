@@ -1,6 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import chess, chess.engine, os, torch, torch.nn.functional as F, json, math
+import chess, chess.engine, os, json, math
 from model import TinyPolicyNet
 from utils import board_to_tensor, legal_moves
 from pydantic import BaseModel
@@ -16,9 +16,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL = TinyPolicyNet(); MODEL.eval()
-STOCKFISH="/opt/homebrew/bin/stockfish"  # confirm with `which stockfish`
+STOCKFISH = "/opt/homebrew/bin/stockfish"  # confirm with `which stockfish`
 LEADERBOARD_FILE = "leaderboard.json"
+
+_model = None
+_engine = None
+
+def get_model():
+    global _model
+    if _model is None:
+        _model = TinyPolicyNet()
+    return _model
+
+def get_engine():
+    global _engine
+    if _engine is None:
+        _engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH)
+    return _engine
 
 class GameResult(BaseModel):
     user: str
@@ -30,11 +44,7 @@ def pick_move(fen: str, depth: int = 10):
     b = chess.Board(fen)
 
     # 1. Run Stockfish analysis (single search — best move comes from pv[0])
-    engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH)
-    try:
-        result = engine.analyse(b, chess.engine.Limit(depth=depth))
-    finally:
-        engine.quit()
+    result = get_engine().analyse(b, chess.engine.Limit(depth=depth))
 
     if not result.get("pv"):
         return {"move": None, "confidence": None}
@@ -49,9 +59,7 @@ def pick_move(fen: str, depth: int = 10):
 
     # 4. Neural network scalar confidence proxy
     x = board_to_tensor(b)
-    with torch.no_grad():
-        logits = MODEL(x).squeeze(0)
-    neural_output = float(torch.sigmoid(logits.mean()))
+    neural_output = get_model().forward(x)
 
     # 5. Combine, no clamping
     confidence = 0.7 * p_stockfish + 0.3 * neural_output
@@ -71,29 +79,27 @@ def get_leaderboard():
     if not os.path.exists(LEADERBOARD_FILE):
         return {"rows": []}
     with open(LEADERBOARD_FILE, 'r') as f:
-        data = json.load(f)
-    return data
+        rows = json.load(f).get("rows", [])
+    top10 = sorted(rows, key=lambda r: r["moves"], reverse=True)[:10]
+    return {"rows": top10}
 
 @app.post("/submit_result")
 def submit_result(result: GameResult):
+    if result.result not in ("Win", "Loss", "Draw"):
+        raise HTTPException(status_code=400, detail="result must be Win, Loss, or Draw")
     if not os.path.exists(LEADERBOARD_FILE):
-        data = {"rows": []}
+        rows = []
     else:
         with open(LEADERBOARD_FILE, 'r') as f:
-            data = json.load(f)
-    
-    data["rows"].append({
+            rows = json.load(f).get("rows", [])
+    rows.append({
         "user": result.user,
         "result": result.result,
         "moves": result.moves,
-        "timestamp": result.timestamp
+        "timestamp": result.timestamp,
     })
-    
-    # Keep only the last 50 entries
-    data["rows"] = data["rows"][-50:]
-    
+    rows = rows[-100:]
     with open(LEADERBOARD_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
-    
+        json.dump({"rows": rows}, f, indent=2)
     return {"status": "success"}
 
