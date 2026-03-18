@@ -1,0 +1,17 @@
+{
+  "rows": [
+    {
+      "user": "Guest",
+      "result": "Draw",
+      "moves": 42,
+      "timestamp": 1738791250
+    },
+    {
+      "user": "Guest",
+      "result": "AI",
+      "moves": 25,
+      "timestamp": 1738792402
+    }
+  ]
+}
+

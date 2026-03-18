@@ -1,0 +1,159 @@
+/* ChessPulse - App Styles */
+
+.app-container {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.main-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.main-section h1 {
+  margin: 0;
+  font-size: 2.5em;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.main-section p {
+  margin: 8px 0;
+  color: #666;
+  font-size: 1.1em;
+}
+
+.style-selector {
+  padding: 10px 16px;
+  font-size: 1em;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  font-family: inherit;
+  max-width: 200px;
+}
+
+.style-selector:hover {
+  border-color: #646cff;
+}
+
+.style-selector:focus {
+  outline: none;
+  border-color: #646cff;
+  box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.1);
+}
+
+.board-container {
+  margin-top: 12px;
+  max-width: 600px;
+}
+
+.leaderboard-section {
+  background: #f9f9f9;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.leaderboard-section h2 {
+  margin: 0 0 16px 0;
+  font-size: 1.8em;
+  color: #1a1a1a;
+}
+
+.refresh-button {
+  border-radius: 8px;
+  border: 2px solid #646cff;
+  padding: 8px 16px;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: white;
+  color: #646cff;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 16px;
+}
+
+.refresh-button:hover {
+  background-color: #646cff;
+  color: white;
+}
+
+.leaderboard-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.leaderboard-list li {
+  padding: 12px;
+  margin-bottom: 8px;
+  background: white;
+  border-radius: 8px;
+  font-size: 0.95em;
+  line-height: 1.5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
+}
+
+.leaderboard-list li:hover {
+  transform: translateX(4px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .main-section h1 {
+    color: #ffffff;
+  }
+
+  .main-section p {
+    color: #cccccc;
+  }
+
+  .style-selector {
+    background-color: #2a2a2a;
+    border-color: #444;
+    color: #ffffff;
+  }
+
+  .leaderboard-section {
+    background: #2a2a2a;
+  }
+
+  .leaderboard-section h2 {
+    color: #ffffff;
+  }
+
+  .leaderboard-list li {
+    background: #1a1a1a;
+    color: #ffffff;
+  }
+
+  .refresh-button {
+    background-color: #2a2a2a;
+  }
+
+  .refresh-button:hover {
+    background-color: #646cff;
+  }
+}
+
+@media (max-width: 968px) {
+  .app-container {
+    grid-template-columns: 1fr;
+  }
+
+  .board-container {
+    max-width: 100%;
+  }
+}

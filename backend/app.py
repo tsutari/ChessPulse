@@ -1,33 +1,98 @@
 from fastapi import FastAPI
-import chess, subprocess, os, torch, torch.nn.functional as F
+from fastapi.middleware.cors import CORSMiddleware
+import chess, chess.engine, os, torch, torch.nn.functional as F, json, math
 from model import TinyPolicyNet
 from utils import board_to_tensor, legal_moves
+from pydantic import BaseModel
 
 app = FastAPI(title="ChessPulse API")
+
+# Enable CORS for all origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 MODEL = TinyPolicyNet(); MODEL.eval()
 STOCKFISH="/opt/homebrew/bin/stockfish"  # confirm with `which stockfish`
+LEADERBOARD_FILE = "leaderboard.json"
 
-def pick_move(fen,style="classic"):
-    b=chess.Board(fen)
-    x=board_to_tensor(b)
-    with torch.no_grad(): logits=MODEL(x).squeeze(0)
-    temp={"defensive":0.5,"classic":1.0,"aggressive":1.5}.get(style,1.0)
-    probs=F.softmax(logits/temp,0)
-    leg=legal_moves(b)
-    step=max(1,len(probs)//max(1,len(leg)))
-    scored=[(m,float(probs[min(i*step,probs.size(0)-1)])) for i,m in enumerate(leg)]
-    scored.sort(key=lambda t:t[1],reverse=True)
-    mv,p=(scored[0] if scored else (None,0))
-    if not mv or p<0.25:
-        proc=subprocess.run([STOCKFISH],
-            input=f"position fen {fen}\ngo depth 6\nquit\n".encode(),
-            capture_output=True)
-        for line in proc.stdout.decode().splitlines():
-            if line.startswith("bestmove"):
-                mv=line.split()[1]; p=0.95; break
-    return {"move":mv,"confidence":round(p,3),"top_moves":scored[:3]}
+class GameResult(BaseModel):
+    user: str
+    result: str
+    moves: int
+    timestamp: int
+
+def pick_move(fen: str, depth: int = 10):
+    b = chess.Board(fen)
+
+    # 1. Open Stockfish via python-chess engine API
+    engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH)
+    try:
+        result = engine.analyse(b, chess.engine.Limit(depth=depth))
+        best_move = engine.play(b, chess.engine.Limit(depth=depth)).move
+    finally:
+        engine.quit()
+
+    if not best_move:
+        return {"move": None, "confidence": None}
+
+    # 2. Extract centipawn score from Black's perspective (negate White's score)
+    cp = -result["score"].white().score(mate_score=10000)
+
+    # 3. Convert to win probability via sigmoid (positive cp = Black winning)
+    p_stockfish = 1.0 / (1.0 + math.exp(-cp / 200.0))
+
+    # 4. Neural network scalar confidence proxy
+    x = board_to_tensor(b)
+    with torch.no_grad():
+        logits = MODEL(x).squeeze(0)
+    neural_output = float(torch.sigmoid(logits.mean()))
+
+    # 5. Combine, no clamping
+    confidence = 0.7 * p_stockfish + 0.3 * neural_output
+
+    return {"move": best_move.uci(), "confidence": round(confidence, 3)}
+
+@app.get("/")
+def root():
+    return {"message": "ChessPulse API is running", "status": "ok"}
 
 @app.get("/move")
-def move(fen:str,style:str="classic"):
-    return pick_move(fen,style)
+def move(fen: str, depth: int = 10):
+    return pick_move(fen, depth)
+
+@app.get("/leaderboard")
+def get_leaderboard():
+    if not os.path.exists(LEADERBOARD_FILE):
+        return {"rows": []}
+    with open(LEADERBOARD_FILE, 'r') as f:
+        data = json.load(f)
+    return data
+
+@app.post("/submit_result")
+def submit_result(result: GameResult):
+    if not os.path.exists(LEADERBOARD_FILE):
+        data = {"rows": []}
+    else:
+        with open(LEADERBOARD_FILE, 'r') as f:
+            data = json.load(f)
+    
+    data["rows"].append({
+        "user": result.user,
+        "result": result.result,
+        "moves": result.moves,
+        "timestamp": result.timestamp
+    })
+    
+    # Keep only the last 50 entries
+    data["rows"] = data["rows"][-50:]
+    
+    with open(LEADERBOARD_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+    
+    return {"status": "success"}
 

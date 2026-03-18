@@ -1,0 +1,16 @@
+# Docker ignore file
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.git/
+.gitignore
+*.md
+.DS_Store
+*.log
+Dockerfile
+.dockerignore
+
