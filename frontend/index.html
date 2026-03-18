@@ -251,6 +251,7 @@
 
     if (checkGameOver()) return;
 
+    applyHeatmap([]);
     setStatus('<span class="spinner"></span>Stockfish thinking…', "thinking");
     document.getElementById("last-move").textContent = "";
     waiting = true;
@@ -258,6 +259,28 @@
   }
 
   function onSnapEnd() { board.position(game.fen()); }
+
+  // ── heatmap ───────────────────────────────────────────────────────────────
+
+  function applyHeatmap(heatmap) {
+    // Clear any previous square highlights
+    $(".square-55d63").css("background", "");
+    if (!heatmap || !heatmap.length) return;
+
+    const maxAbs = Math.max(...heatmap.map(h => Math.abs(h.value)), 1);
+
+    heatmap.forEach(({ square, value }) => {
+      const intensity = Math.min(Math.abs(value) / maxAbs, 1);
+      const alpha = 0.25 + intensity * 0.55;   // 0.25 → 0.80
+
+      let color;
+      if (value > 100)      color = `rgba(220, 50,  50,  ${alpha.toFixed(2)})`;  // red   — strong
+      else if (value >= 0)  color = `rgba(220, 170,  0,  ${alpha.toFixed(2)})`;  // yellow — decent
+      else                  color = `rgba(50,  100, 220, ${alpha.toFixed(2)})`;  // blue  — weak
+
+      $(`.square-${square}`).css("background", color);
+    });
+  }
 
   // ── AI call ───────────────────────────────────────────────────────────────
 
@@ -280,6 +303,7 @@
       moveHistory.push(mv.san);
       updateMoveList();
       board.position(game.fen());
+      applyHeatmap(data.heatmap);
       document.getElementById("last-move").textContent = `AI: ${mv.san} (${uci})`;
       if (data.confidence != null) {
         const pct = Math.round(data.confidence * 100);
@@ -315,6 +339,7 @@
     moveHistory = [];
     board.start();
     updateMoveList();
+    applyHeatmap([]);
     setStatus("Your move", "ok");
     document.getElementById("last-move").textContent = "";
     document.getElementById("confidence").textContent = "";
