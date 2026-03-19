@@ -3,7 +3,11 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Install system dependencies for Stockfish (optional but recommended)
-RUN apt-get update && apt-get install -y stockfish && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y stockfish --no-install-recommends && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    which stockfish && stockfish --help || echo "stockfish check done"
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
