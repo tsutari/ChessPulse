@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import chess, chess.engine, os, json, math
+import chess, chess.engine, os, json, math, shutil
 from model import TinyPolicyNet
 from utils import board_to_tensor, legal_moves
 from pydantic import BaseModel
@@ -10,13 +10,23 @@ app = FastAPI(title="ChessPulse API")
 # Enable CORS for all origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://tsutari.github.io",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-STOCKFISH = "/opt/homebrew/bin/stockfish"  # confirm with `which stockfish`
+STOCKFISH = (
+    shutil.which("stockfish")
+    or "/usr/bin/stockfish"
+    or "/usr/games/stockfish"
+)
+if not STOCKFISH or not os.path.isfile(STOCKFISH):
+    raise RuntimeError(f"Stockfish binary not found. Tried: shutil.which, /usr/bin/stockfish, /usr/games/stockfish")
 LEADERBOARD_FILE = "leaderboard.json"
 
 _model = None
