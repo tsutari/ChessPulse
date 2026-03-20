@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import chess, chess.engine, os, json, math, shutil
+import chess, chess.engine, os, json, math, shutil, random, logging
 from model import TinyPolicyNet
 from utils import board_to_tensor, legal_moves
 from pydantic import BaseModel
@@ -20,13 +20,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STOCKFISH = (
-    shutil.which("stockfish")
-    or "/usr/bin/stockfish"
-    or "/usr/games/stockfish"
-)
-if not STOCKFISH or not os.path.isfile(STOCKFISH):
-    raise RuntimeError(f"Stockfish binary not found. Tried: shutil.which, /usr/bin/stockfish, /usr/games/stockfish")
+_STOCKFISH_WARNING_LOGGED = False
+
+def _resolve_stockfish():
+    for candidate in [
+        os.environ.get("STOCKFISH_PATH"),
+        shutil.which("stockfish"),
+        "/usr/bin/stockfish",
+        "/usr/games/stockfish",
+    ]:
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return None
+
+STOCKFISH = _resolve_stockfish()
+
+def _get_stockfish_move(fen: str, depth: int = 10):
+    """Return (uci_move, cp) using Stockfish, or a random legal move if unavailable."""
+    global _STOCKFISH_WARNING_LOGGED
+    b = chess.Board(fen)
+    if STOCKFISH is None:
+        if not _STOCKFISH_WARNING_LOGGED:
+            logging.warning("Stockfish not found — falling back to random legal moves.")
+            _STOCKFISH_WARNING_LOGGED = True
+        move = random.choice(list(b.legal_moves))
+        return move.uci(), 0
+    engine = get_engine()
+    result = engine.analyse(b, chess.engine.Limit(depth=depth))
+    best_move = result["pv"][0] if result.get("pv") else None
+    if not best_move:
+        move = random.choice(list(b.legal_moves))
+        return move.uci(), 0
+    cp = -result["score"].white().score(mate_score=10000)
+    return best_move.uci(), cp
+
 LEADERBOARD_FILE = "leaderboard.json"
 
 _model = None
@@ -40,7 +67,7 @@ def get_model():
 
 def get_engine():
     global _engine
-    if _engine is None:
+    if _engine is None and STOCKFISH:
         _engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH)
     return _engine
 
@@ -53,28 +80,23 @@ class GameResult(BaseModel):
 def pick_move(fen: str, depth: int = 10):
     b = chess.Board(fen)
 
-    # 1. Run Stockfish analysis (single search — best move comes from pv[0])
-    result = get_engine().analyse(b, chess.engine.Limit(depth=depth))
+    # 1. Get best move + centipawn via Stockfish (or random fallback)
+    uci_move, cp = _get_stockfish_move(fen, depth)
 
-    if not result.get("pv"):
+    if not uci_move:
         return {"move": None, "confidence": None}
 
-    best_move = result["pv"][0]
-
-    # 2. Centipawn score from Black's perspective
-    cp = -result["score"].white().score(mate_score=10000)
-
-    # 3. Sigmoid win probability
+    # 2. Sigmoid win probability from Black's perspective
     p_stockfish = 1.0 / (1.0 + math.exp(-cp / 200.0))
 
-    # 4. Neural network scalar confidence proxy
+    # 3. Neural network scalar confidence proxy
     x = board_to_tensor(b)
     neural_output = get_model().forward(x)
 
-    # 5. Combine, no clamping
+    # 4. Combine, no clamping
     confidence = 0.7 * p_stockfish + 0.3 * neural_output
 
-    return {"move": best_move.uci(), "confidence": round(confidence, 3)}
+    return {"move": uci_move, "confidence": round(confidence, 3)}
 
 @app.get("/")
 def root():
