@@ -11,4 +11,4 @@ class TinyPolicyNet:
     def forward(self, x):
         h = np.maximum(0, x @ self.W1 + self.b1)
         y = 1 / (1 + np.exp(-(h @ self.W2 + self.b2)))
-        return float(y)
+        return float(y.item())
