@@ -135,3 +135,13 @@ def submit_result(result: GameResult):
         json.dump({"rows": rows}, f, indent=2)
     return {"status": "success"}
 
+@app.get("/debug")
+def debug():
+    import shutil, os
+    return {
+        "which_stockfish": shutil.which("stockfish"),
+        "usr_bin_exists": os.path.isfile("/usr/bin/stockfish"),
+        "usr_games_exists": os.path.isfile("/usr/games/stockfish"),
+        "env_var": os.environ.get("STOCKFISH_PATH")
+    }
+
