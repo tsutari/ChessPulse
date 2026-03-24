@@ -4,6 +4,8 @@ A chess app where you play against Stockfish and watch its confidence shift in r
 
 Live at **[tsutari.github.io/ChessPulse](https://tsutari.github.io/ChessPulse)**.
 
+Note: the backend is hosted on a free tier and may take up to 60 seconds to wake up on the first move.
+
 ## What it does
 
 You play White and Stockfish plays Black. After every AI move a confidence score shows how good Stockfish thinks its position is, plotted on a live chart as the game goes on, and results are tracked on the leaderboard.
